@@ -1,0 +1,91 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<ui version="4.0">
+ <class>MainWindow</class>
+ <widget class="QMainWindow" name="MainWindow">
+  <property name="geometry">
+   <rect>
+    <x>0</x>
+    <y>0</y>
+    <width>512</width>
+    <height>374</height>
+   </rect>
+  </property>
+  <property name="windowTitle">
+   <string>Reminder v1.0</string>
+  </property>
+  <widget class="QWidget" name="centralwidget">
+   <widget class="QLabel" name="label">
+    <property name="geometry">
+     <rect>
+      <x>130</x>
+      <y>40</y>
+      <width>261</width>
+      <height>61</height>
+     </rect>
+    </property>
+    <property name="font">
+     <font>
+      <pointsize>16</pointsize>
+     </font>
+    </property>
+    <property name="text">
+     <string>Добро пожаловать!</string>
+    </property>
+   </widget>
+   <widget class="QPushButton" name="btnCreate">
+    <property name="geometry">
+     <rect>
+      <x>40</x>
+      <y>90</y>
+      <width>431</width>
+      <height>51</height>
+     </rect>
+    </property>
+    <property name="text">
+     <string>Создать лист</string>
+    </property>
+   </widget>
+   <widget class="QPushButton" name="btnOpen">
+    <property name="geometry">
+     <rect>
+      <x>40</x>
+      <y>147</y>
+      <width>431</width>
+      <height>51</height>
+     </rect>
+    </property>
+    <property name="text">
+     <string>Открыть лист</string>
+    </property>
+   </widget>
+   <widget class="QPushButton" name="btnExit">
+    <property name="geometry">
+     <rect>
+      <x>40</x>
+      <y>300</y>
+      <width>431</width>
+      <height>51</height>
+     </rect>
+    </property>
+    <property name="text">
+     <string>Выйти</string>
+    </property>
+   </widget>
+   <widget class="QPushButton" name="btnSettings">
+    <property name="geometry">
+     <rect>
+      <x>40</x>
+      <y>200</y>
+      <width>431</width>
+      <height>51</height>
+     </rect>
+    </property>
+    <property name="text">
+     <string>Настройки</string>
+    </property>
+   </widget>
+  </widget>
+ </widget>
+ <resources/>
+ <connections/>
+</ui>
