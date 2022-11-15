@@ -78,11 +78,15 @@ class CalendarForm(QMainWindow):
             self.initUI()
             self.setCalendarColors()
             if args[1] == "create":
+                print(1)
                 self.saveFname = QFileDialog.getSaveFileName(self, "Сохранить", "", "База данных (*.sqlite)")[0]
-                if self.saveFname[-7:] != ".sqlite" and self.saveFname != "":
-                    self.saveFname = self.saveFname + ".sqlite"
-                else:
+                # if self.saveFname[-7:] != ".sqlite" and self.saveFname != "":
+                #     self.saveFname = self.saveFname + ".sqlite"
+                # else:
+                #     raise FormError("empty path")
+                if self.saveFname == "":
                     raise FormError("empty path")
+                print(3)
 
                 con = sqlite3.connect(self.saveFname)
                 cur = con.cursor()
@@ -99,7 +103,7 @@ class CalendarForm(QMainWindow):
                 self.calendarW.clicked.connect(self.updateInfo)
                 self.btnAdd.clicked.connect(self.createEvent)
                 self.tableWidget.setColumnCount(2)
-                self.tableWidget.cellClicked.connecte(self.chageEvent)
+                self.tableWidget.cellClicked.connect(self.chageEvent)
                 self.tableWidget.setRowCount(0)
                 self.tableWidget.setHorizontalHeaderLabels(["Время", "Событие"])
                 self.cellFirst = True
@@ -168,7 +172,8 @@ class CalendarForm(QMainWindow):
                 msg.setWindowTitle("Unknown error")
                 msg.exec_()
                 sys.exit(0)
-        except Exception:
+        except Exception as e:
+            print(e)
             msg = QMessageBox()
             msg.setIcon(QMessageBox.Critical)
             msg.setText("Unknown error")
