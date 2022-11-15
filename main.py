@@ -1,54 +1,21 @@
-# TODO: double click on cell in table to edit event | 0%
-# TODO: double click on cell in calendar to edit event | 10%  <-- connected, tomorrow i'll make def (changeEvent())
-# TODO: test different file names (ex: save (create) file 'name../"".,.csv' | 0%
-# TODO: make notifications | ... xd
-# TODO: settings | 30%
-# TODO: redo excel saving -> SQL DB saving (and reading) | 0%
+# TODO: make exe
 
 import sys
+from MODULES import eventX, mycalendar
 import threading
-import csv
-import plyer
+import sqlite3
 
 from PyQt5 import uic  # Импортируем uic
-from PyQt5.QtWidgets import QApplication, QMainWindow, QTableWidgetItem, QFileDialog, QCalendarWidget
-from PyQt5.QtCore import QRect, QDate
+from PyQt5.QtWidgets import QApplication, QMainWindow, QTableWidgetItem, QFileDialog, QColorDialog, QMessageBox
+from PyQt5.QtCore import QRect, QDate, QTime
 from PyQt5.QtGui import QColor
 
 event = None
 event_done = False
+event_canceled = False
 
-
-class MyCalendar(QCalendarWidget):
-    def __init__(self, parent=None):
-        QCalendarWidget.__init__(self, parent)
-        self.dates = []
-        self.currentColor = QColor(255, 0, 0, 50)
-        self.eventColor = QColor(255, 0, 0, 255)
-
-    def paintCell(self, painter, rect, date):
-        QCalendarWidget.paintCell(self, painter, rect, date)
-        if date == date.currentDate():
-            painter.setBrush(self.currentColor)
-            painter.setPen(QColor(0, 0, 0, 0))
-            painter.drawRect(rect)
-        if date in self.dates:
-            painter.setBrush(self.eventColor)
-            painter.setPen(QColor(0, 0, 0, 0))
-            painter.drawRect(rect.x() + 20, rect.y() + 47, 5, 5)
-
-    def addEventDate(self, date):
-        if date not in self.dates:
-            self.dates.append(date)
-
-    def getEventDates(self):
-        return self.dates
-
-    def setColors(self, current=None, event=None):
-        if current:
-            self.currentColor = current
-        if event:
-            self.eventColor = event
+colorToday = QColor(255, 0, 0, 50)
+colorEvent = QColor(255, 0, 0, 255)
 
 
 class FormError(Exception):
@@ -60,46 +27,15 @@ class FormError(Exception):
 
     def __str__(self):
         if self.message:
-            return f"FormError: {self.message}"
+            return f"{self.message}"
         else:
             return "Form has been raised"
 
 
-class Event():
-    def __init__(self, date, time, text):
-        self.date = date
-        self.time = time
-        self.text = text
-
-    def __str__(self):
-        return f"{self.date},{self.time};{self.text}"
-
-    def getDate(self):
-        return self.date
-
-    def getTime(self):
-        return self.time
-
-    def getText(self):
-        return self.text
-
-    def getFullDate(self):
-        return f"{self.date},{self.time}"
-
-    def setDate(self, date):
-        self.date = date
-
-    def setTime(self, time):
-        self.time = time
-
-    def setText(self, text):
-        self.text = text
-
-
 class WelcomeForm(QMainWindow):
-    def __init__(self):
+    def __init__(self, *args):
         super().__init__()
-        uic.loadUi('welcome.ui', self)  # Загружаем дизайн
+        uic.loadUi(r'UI_Files/welcome.ui', self)  # Загружаем дизайн
         self.btnExit.clicked.connect(self.exit)
         self.btnCreate.clicked.connect(self.create)
         self.btnOpen.clicked.connect(self.openNew)
@@ -126,81 +62,140 @@ class WelcomeForm(QMainWindow):
 
 class CalendarForm(QMainWindow):
     def __init__(self, *args):
-        self.mode = None
-        self.os = self.checkPlatform()
-        self.saved = True
-        self.saveFname = None
+        try:
+            self.mode = None
+            self.os = self.checkPlatform()
+            self.saved = True
+            self.fname = None
+            self.saveFname = None
+            self._back = False
 
-        self.monthes = ["января", "февраля", "марта", "апреля", "мая", "июня", "июля", "августа", "сентября", "октября",
-                        "ноября", "декабря"]
+            self.monthes = ["января", "февраля", "марта", "апреля", "мая", "июня", "июля", "августа", "сентября", "октября",
+                            "ноября", "декабря"]
 
-        super().__init__()
-        uic.loadUi('table.ui', self)  # Загружаем дизайн
-        self.initUI()
-        if args[1] == "create":
-            self.saveFname = QFileDialog.getSaveFileName(self, "Сохранить", "", "Таблица (*.csv)")[0]
-            if self.saveFname[-4:] != ".csv" and self.saveFname != "":
-                self.saveFname = self.saveFname + ".csv"
+            super().__init__()
+            uic.loadUi(r'UI_Files/table.ui', self)  # Загружаем дизайн
+            self.initUI()
+            self.setCalendarColors()
+            if args[1] == "create":
+                self.saveFname = QFileDialog.getSaveFileName(self, "Сохранить", "", "База данных (*.sqlite)")[0]
+                if self.saveFname[-7:] != ".sqlite" and self.saveFname != "":
+                    self.saveFname = self.saveFname + ".sqlite"
+                else:
+                    raise FormError("empty path")
+
+                con = sqlite3.connect(self.saveFname)
+                cur = con.cursor()
+                cur.execute("""CREATE TABLE IF NOT EXISTS Event (date, time, text)""")
+                cur.execute("""DELETE FROM Event""")
+                con.commit()
+
+                res = cur.execute("SELECT * FROM Event").fetchall()
+                for i in res:
+                    print(i)
+
+                self.mode = "create"
+
+                self.calendarW.clicked.connect(self.updateInfo)
+                self.btnAdd.clicked.connect(self.createEvent)
+                self.tableWidget.setColumnCount(2)
+                self.tableWidget.cellClicked.connecte(self.chageEvent)
+                self.tableWidget.setRowCount(0)
+                self.tableWidget.setHorizontalHeaderLabels(["Время", "Событие"])
+                self.cellFirst = True
+                self.day = None
+                self.month = None
+                self.year = None
+                #  self.tableWidget.setEnabled(False) !!! а че делать оно серое
+
+                self.updateInfo()
+            elif args[1] == "open":
+                self.mode = "open"
+
+                self.fname = QFileDialog.getOpenFileName(
+                    self, 'Выбрать файл', '',
+                    'База данных (*.sqlite)')[0]
+
+                self.calendarW.clicked.connect(self.updateInfo)
+                self.btnAdd.clicked.connect(self.createEvent)
+                self.tableWidget.cellClicked.connect(self.chageEvent)
+                self.tableWidget.setColumnCount(2)
+                self.tableWidget.setRowCount(0)
+                self.tableWidget.setHorizontalHeaderLabels(["Время", "Событие"])
+                self.cellFirst = True
+                self.day = None
+                self.month = None
+                self.year = None
+                #  self.tableWidget.setEnabled(False) !!! а че делать оно серое
+
+                _dates = []
+
+                con = sqlite3.connect(self.fname)
+                cur = con.cursor()
+                result = cur.execute("""SELECT * FROM Event""").fetchall()
+                con.close()
+
+                for i in result:
+                    self.calendarW.addEventDate(
+                        QDate(int(i[0].split(".")[2]), int(i[0].split(".")[1]), int(i[0].split(".")[0])))
+
+
+                self.updateInfo()
             else:
-                raise FormError("empty path")
-            f = open(self.saveFname, "w")
-            f.close()
-
-            self.mode = "create"
-
-            self.calendarW.clicked.connect(self.updateInfo)
-            self.calendarW.activated.connect(self.chageEvent)
-            self.btnAdd.clicked.connect(self.createEvent)
-            self.tableWidget.setColumnCount(2)
-            self.tableWidget.setRowCount(0)
-            self.tableWidget.setHorizontalHeaderLabels(["Время", "Событие"])
-            self.cellFirst = True
-            self.day = None
-            self.month = None
-            self.year = None
-            #  self.tableWidget.setEnabled(False) !!! а че делать оно серое
-
-            self.updateInfo()
-        elif args[1] == "open":
-            self.mode = "open"
-
-            self.fname = QFileDialog.getOpenFileName(
-                self, 'Выбрать файл', '',
-                'Таблица (*.csv)')[0]
-
-            self.calendarW.clicked.connect(self.updateInfo)
-            self.btnAdd.clicked.connect(self.createEvent)
-            self.calendarW.activated.connect(self.chageEvent)
-            self.tableWidget.setColumnCount(2)
-            self.tableWidget.setRowCount(0)
-            self.tableWidget.setHorizontalHeaderLabels(["Время", "Событие"])
-            self.cellFirst = True
-            self.day = None
-            self.month = None
-            self.year = None
-            #  self.tableWidget.setEnabled(False) !!! а че делать оно серое
-
-            _dates = []
-
-            with open(self.fname, encoding="utf8") as csvfile:
-                reader = csv.reader(csvfile, delimiter=';', quotechar='"')
-                for index, row in enumerate(reader):
-                    if row[0].split(",")[0] not in _dates:
-                        _dates.append(row[0].split(",")[0])
-                        self.calendarW.addEventDate(
-                            QDate(int((row[0].split(",")[0]).split(".")[2]), int((row[0].split(",")[0]).split(".")[1]),
-                                  int((row[0].split(",")[0]).split(".")[0])))
-
-            self.updateInfo()
-        else:
-            raise FormError("unknown table creating mode")
+                raise FormError("unknown table creating mode")
+        except sqlite3.OperationalError as e:
+            self._back = True
+            msg = QMessageBox()
+            msg.setIcon(QMessageBox.Critical)
+            msg.setText("Path error")
+            msg.setInformativeText('Invalid path')
+            msg.setWindowTitle("Path error")
+            msg.exec_()
+            sys.exit(0)
+        except FormError as e:
+            if e == "empty path":
+                msg = QMessageBox()
+                msg.setIcon(QMessageBox.Critical)
+                msg.setText("path error")
+                msg.setInformativeText("Path can't be empty")
+                msg.setWindowTitle("Path error")
+                msg.exec_()
+                sys.exit(0)
+            elif e == "unknown table creating mode":
+                msg = QMessageBox()
+                msg.setIcon(QMessageBox.Critical)
+                msg.setText("Mode error")
+                msg.setWindowTitle("Unknown error")
+                msg.exec_()
+                sys.exit(0)
+        except Exception:
+            msg = QMessageBox()
+            msg.setIcon(QMessageBox.Critical)
+            msg.setText("Unknown error")
+            msg.setWindowTitle("Unknown error")
+            msg.exec_()
+            sys.exit(0)
 
     def initUI(self):
-        self.calendarW = MyCalendar(self.centralwidget)
+        self.calendarW = mycalendar.MyCalendar(self.centralwidget)
         self.calendarW.setGeometry(QRect(0, 0, 1121, 751))
         self.calendarW.setObjectName("calendarW")
 
+    def setCalendarColors(self):
+        global colorEvent
+        global colorToday
+
+        if colorToday:
+            self.calendarW.setColors(current=colorToday)
+        if colorEvent:
+            self.calendarW.setColors(event=colorEvent)
+
     def updateInfo(self):
+        if self._back:
+            print(123)
+            self.welcomeForm = WelcomeForm(self)
+            self.welcomeForm.show()
+            self.close()
         def get_key(d, value):
             for k, v in d.items():
                 if v == value:
@@ -219,11 +214,13 @@ class CalendarForm(QMainWindow):
 
             events = []
 
-            with open(self.saveFname, encoding="utf8") as csvfile:
-                reader = csv.reader(csvfile, delimiter=';', quotechar='"')
-                for index, row in enumerate(reader):
-                    if row[0].split(",")[0] == _date:
-                        events.append([row[0].split(",")[1], row[1]])
+            con = sqlite3.connect(self.saveFname)
+            cur = con.cursor()
+            result = cur.execute("""SELECT * FROM Event WHERE date = ?""", (_date,)).fetchall()
+            con.close()
+
+            for i in result:
+                events.append([i[1], i[2]])
 
             events = list(map(lambda x: [self.hoursToMinutes(x[0]), x[1]], events))
             if events:
@@ -253,11 +250,13 @@ class CalendarForm(QMainWindow):
             _date = f"{self.day}.{self.month}.{self.year}"
             events = []
 
-            with open(self.fname, encoding="utf8") as csvfile:
-                reader = csv.reader(csvfile, delimiter=';', quotechar='"')
-                for index, row in enumerate(reader):
-                    if row[0].split(",")[0] == _date:
-                        events.append([row[0].split(",")[1], row[1]])
+            con = sqlite3.connect(self.fname)
+            cur = con.cursor()
+            result = cur.execute("""SELECT * FROM Event WHERE date = ?""", (_date,)).fetchall()
+            con.close()
+
+            for i in result:
+                events.append([i[1], i[2]])
 
             events = list(map(lambda x: [self.hoursToMinutes(x[0]), x[1]], events))
             if events:
@@ -301,25 +300,28 @@ class CalendarForm(QMainWindow):
 
                     # сохранение файла в csv таблицу
                     if self.mode == "create":
-                        with open(self.saveFname, "a", newline="", encoding="utf-8") as csvfile:
-                            writer = csv.writer(
-                                csvfile, delimiter=';', quotechar='"', quoting=csv.QUOTE_MINIMAL
-                            )
-                            writer.writerow([event.getFullDate(), event.getText()])
+                        con = sqlite3.connect(self.saveFname)
+                        cur = con.cursor()
+                        cur.execute("""INSERT INTO Event(date,time,text) VALUES(?,?,?)""",
+                                    (event.getDate(), event.getTime(), event.getText()))
+                        con.commit()
+                        con.close()
 
                         self.saved = False
                         event_done = False
                     elif self.mode == "open":
-                        with open(self.fname, "a", newline="", encoding="utf-8") as csvfile:
-                            writer = csv.writer(
-                                csvfile, delimiter=';', quotechar='"', quoting=csv.QUOTE_MINIMAL
-                            )
-                            writer.writerow([event.getFullDate(), event.getText()])
+                        con = sqlite3.connect(self.fname)
+                        cur = con.cursor()
+                        cur.execute("""INSERT INTO Event(date,time,text) VALUES(?,?,?)""",
+                                    (event.getDate(), event.getTime(), event.getText()))
+                        con.commit()
+                        con.close()
 
                         self.saved = False
                         event_done = False
                 else:
                     pass
+
         self.createForm = CreateEventForm(self, [self.day, self.month, self.year])
         self.createForm.show()
         t = threading.Thread(target=waiting)
@@ -327,19 +329,59 @@ class CalendarForm(QMainWindow):
 
     def back(self):
         self.welcomeForm = WelcomeForm(self)
-        self.selcomeForm.show()
+        self.welcomeForm.show()
         self.close()
 
-    def notify(self, msg):
-        if self.os == "windows":
-            ICON_PATH = "calendar_icon.ico"
+    def chageEvent(self, r, c):
+        def waiting():
+            global event_done
+            global event_canceled
+            global event
+            while not event_done:
+                pass
+            else:
+                if event_done and not event_canceled:
+                    self.updateInfo()
+                    if event.getTime() and event.getText():
+                        self.addEvent(event.getTime(), event.getText())
 
-            plyer.notification.notify(message=msg, app_name="Reminder", title="Событие!")
-        else:
-            pass
+                        # сохранение файла в csv таблицу
+                        if self.mode == "create":
+                            con = sqlite3.connect(self.saveFname)
+                            cur = con.cursor()
+                            cur.execute("""UPDATE Event SET date=?, time=?, text=? WHERE date=? AND time=? AND text=?""",
+                                        (event.getDate(), event.getTime(), event.getText(),
+                                         f"{self.day}.{self.month}.{self.year}", self.tableWidget.item(r, 0).text(),
+                                         self.tableWidget.item(r, 1).text()))
+                            con.commit()
+                            con.close()
 
-    def chageEvent(self):
-        pass
+                            self.saved = False
+                            event_done = False
+                            self.updateInfo()
+                        elif self.mode == "open":
+                            con = sqlite3.connect(self.fname)
+                            cur = con.cursor()
+                            cur.execute("""UPDATE Event SET date=?, time=?, text=? WHERE date=? AND time=? AND text=?""",
+                                        (event.getDate(), event.getTime(), event.getText(),
+                                         f"{self.day}.{self.month}.{self.year}", self.tableWidget.item(r, 0).text(),
+                                         self.tableWidget.item(r, 1).text()))
+                            con.commit()
+                            con.close()
+
+                            self.saved = False
+                            event_done = False
+                            self.updateInfo()
+                    else:
+                        self.updateInfo()
+                elif event_canceled:
+                    pass
+
+        self.changeForm = ChangeEventForm(self, [self.day, self.month, self.year],
+                                          [self.tableWidget.item(r, 0).text(), self.tableWidget.item(r, 1).text()], [self.mode, self.saveFname, self.fname])
+        self.changeForm.show()
+        t = threading.Thread(target=waiting)
+        t.start()
 
     def monthToStr(self, date):
         return self.monthes[date - 1]
@@ -381,7 +423,7 @@ class CalendarForm(QMainWindow):
 class CreateEventForm(QMainWindow):
     def __init__(self, *args):
         super().__init__()
-        uic.loadUi('createForm.ui', self)  # Загружаем дизайн
+        uic.loadUi(r'UI_Files/createForm.ui', self)  # Загружаем дизайн
         self.btnCreate.clicked.connect(self.create)
         self.btnCancel.clicked.connect(self.cancel)
         self.date = ".".join(list(map(str, args[1])))
@@ -391,7 +433,7 @@ class CreateEventForm(QMainWindow):
         global event_done
         time = str(self.timeE.time())[19:-1].split(", ")
         time = self.formatTime(time)
-        event = Event(self.date, str(time[0] + ":" + time[1]), self.tE.toPlainText())
+        event = eventX.Event(self.date, str(time[0] + ":" + time[1]), self.tE.toPlainText())
         self.close()
 
         event_done = True
@@ -417,34 +459,95 @@ class CreateEventForm(QMainWindow):
 class SettingsForm(QMainWindow):
     def __init__(self, *args):
         super().__init__()
-        uic.loadUi('settings.ui', self)  # Загружаем дизайн
+        uic.loadUi(r'UI_Files/settings.ui', self)  # Загружаем дизайн
+        self.btnCancel.clicked.connect(self.back)
+        self.btnSave.clicked.connect(self.save)
+        self.btnDateChange.clicked.connect(self.todayColor)
+        self.btnColorChange.clicked.connect(self.eventColor)
+        self.colorT = None
+        self.colorE = None
+
+    def closeEvent(self, event):
+        self.welcomeForm = WelcomeForm(self)
+        self.welcomeForm.show()
+        self.close()
+
+    def back(self):
+        self.welcomeForm = WelcomeForm(self)
+        self.welcomeForm.show()
+        self.close()
+
+    def todayColor(self):
+        self.colorT = QColorDialog.getColor()
+
+    def eventColor(self):
+        self.colorE = QColorDialog.getColor()
+
+    def save(self):
+        global colorEvent
+        global colorToday
+        if self.colorT:
+            colorEvent = self.colorE
+
+        if self.colorE:
+            colorEvent = self.colorE
+
+        self.back()
+
 
 class ChangeEventForm(QMainWindow):
     def __init__(self, *args):
         super().__init__()
-        uic.loadUi('changeForm.ui', self)  # Загружаем дизайн
+        uic.loadUi(r'UI_Files/changeForm.ui', self)  # Загружаем дизайн
         self.btnCreate.clicked.connect(self.create)
         self.btnDelete.clicked.connect(self.delete)
         self.btnCancel.clicked.connect(self.cancel)
         self.date = ".".join(list(map(str, args[1])))
+        self.time = args[2][0]
+        self.text = args[2][1]
+        self.mode = args[3][0]
+        self.saveFname = args[3][1]
+        self.fname = args[3][2]
+
+        self.loadUI()
+
+    def loadUI(self):
+        self.timeE.setTime(QTime(int(self.time.split(":")[0]), int(self.time.split(":")[1])))
+        self.tE.setPlainText(self.text)
 
     def create(self):
         global event
         global event_done
         time = str(self.timeE.time())[19:-1].split(", ")
         time = self.formatTime(time)
-        event = Event(self.date, str(time[0] + ":" + time[1]), self.tE.toPlainText())
+        event = eventX.Event(self.date, str(time[0] + ":" + time[1]), self.tE.toPlainText())
         self.close()
 
         event_done = True
 
     def cancel(self):
         global event_done
+        global event_canceled
         event_done = True
+        event_canceled = True
         self.close()
 
     def delete(self):
-        pass
+        if self.mode == "create":
+            con = sqlite3.connect(self.saveFname)
+            cur = con.cursor()
+            cur.execute("""DELETE WHERE time=? AND date=? AND text=?""", (self.time, self.date, self.text))
+            con.commit()
+            con.close()
+        elif self.mode == "open":
+            con = sqlite3.connect(self.fname)
+            cur = con.cursor()
+            cur.execute("""DELETE FROM Event WHERE time=? AND date=? AND text=?""", (self.time, self.date, self.text))
+            con.commit()
+            con.close()
+
+        event_done = True
+        self.close()
 
     def formatTime(self, t):
         if len(t[0]) == 1:
@@ -462,6 +565,5 @@ class ChangeEventForm(QMainWindow):
 if __name__ == '__main__':
     app = QApplication(sys.argv)
     ex = WelcomeForm()
-    # ex = CalendarForm(None, "create")
     ex.show()
     sys.exit(app.exec_())

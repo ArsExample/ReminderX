@@ -1,6 +1,0 @@
-notify2.py
-setup.py
-notify2.egg-info/PKG-INFO
-notify2.egg-info/SOURCES.txt
-notify2.egg-info/dependency_links.txt
-notify2.egg-info/top_level.txt
