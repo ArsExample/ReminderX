@@ -533,6 +533,8 @@ class ChangeEventForm(QMainWindow):
         self.close()
 
     def delete(self):
+        global event_canceled
+        global event_done
         if self.mode == "create":
             con = sqlite3.connect(self.saveFname)
             cur = con.cursor()
@@ -546,6 +548,7 @@ class ChangeEventForm(QMainWindow):
             con.commit()
             con.close()
 
+        event_canceled = True
         event_done = True
         self.close()
 
